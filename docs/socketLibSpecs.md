@@ -67,94 +67,14 @@ take place)
 > Error: if some other happens, `UNEXPECTED_CLOSE` will
 happen
 
-
-## `getTrustedClient()` - a.k.a. "PING"
+## `getPort()`
 
 ### Prerequisites
 
-- socket should be opened
-- it should be a properly verified connection
-
 ### Expected Behavior
 
-tries to connect to a client that is requesting to escape
-(using poll). 
-
-> ERROR: socket isnt opened when this is called, then it
-will return `NOEXISTINGSOCKET_PING` error
-
-> ERROR: if verification fails, it will return
-`NOTTRUSTWORTHY_PING` error
-
-
-## `sendToClient(const std::string msg)`
-
-### Prerequisite
-
-- socket is opened
-- client is connected
-- Nonempty string
-
-### Expected Behavior
-
-tries to send a message. Since `send()` may not send the 
-entire message this code will try to use a loop
-to send it all.
-
-> Error: if the socket wasn't opened, it will return
-`NOEXISTINGSOCKET_SENDCLIENT` error
-
-> Error: if the client wasn't even connected, it will
-return `NOCONNECTEDCLIENT_SENDCLIENT` error
-
-> error: full message isnt sent (because of disconnect
-or some weird hang), the message will be dropped and return
-`INCOMPLETESEND` error
-
-
-## `readFromClient()`
-
-### Prerequisite
-
-- socket is opened
-- client is connected
-- `poll()` gives us a good poll
-
-### Expected Behavior
-
-calls `recv()` to try to read a message from the client.
-This also uses a loop as a single `recv()` may not 
-be able to take the full length message
-
-> Error: if the socket wasn't opened, it will return
-`NOEXISTINGSOCKET_READCLIENT` error
-
-> Error: if the client wasn't even connected, it will
-return `NOCONNECTEDCLIENT_READCLIENT` error
-
-> Error: full message isn't received because of some disconnect, the partial message will be dropped and 
-return a string saying `"INVALID"`
-
-
-## `closeClient()`
-
-### Prerequisite
-
-- socket is opened
-- client is connect
-
-### Expected Behavior
-
-simply calls the `close()` function to close the client.
-Any errors because the socket wasn't opened or the client
-wasn't opened, it will return an error but should
-suffer no ill effects
-
-> Error: if the socket wasn't opened, it will return
-`NOEXISTINGSOCKET_CLOSECLIENT` error
-
-> Error: if the client wasn't even connected, it will
-return `NOCONNECTEDCLIENT_CLOSECLIENT` error
+returns the port the socket is connected to. Gives `-1` if not
+connected to a socket
 
 # Free Functions
 
