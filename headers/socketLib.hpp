@@ -29,6 +29,7 @@ enum ErrorCodes{
     INVALIDPORT =                   -10,
     NOTOPENED =                     -11,
     NONEMPTYVECTOR =                -12,
+    ALREADYOPEN =                   -13,
 
     //constants
     UNSCANNEDPORT =                 -1,
@@ -44,7 +45,10 @@ returns a user-friendly message that explains what the
 error is*/
 std::string interpretError(int errCode);
 
-/*returns a vector of valid open ports*/
+/*when given an empty vector
+it will fill that vector with  valid ports
+returns true
+if vector is not empty, returns NONEMPTYVECTOR error*/
 int getValidScannedPorts(int startport, int endport, std::vector<int>& validPorts, bool display=false);
 
 /* A class that acts as a container for variables related to 
@@ -95,13 +99,12 @@ class Socket{
         /*keeps a socket open in NONblocking mode for listening at port
             and keeps track of that port in the member value
             returns 1 if port open was sucessful
-            if port is not valid, return INVALIDPORT error*/
+            if port is not valid, return INVALIDPORT error
+            if openIt is called again without a close, return ALREADYOPEN error*/
         int openIt(int port);
         /*closes the opened socket
             close should generally work 
-            if the socket will never opened to begin with
-            it still resets memory closes but 
-            will return NOTOPENED error */
+            even if the socket will never opened to begin with*/
         int closeIt();
         /*returns the port value this object is connected to
             (note that the port value is -1 if it is not 
