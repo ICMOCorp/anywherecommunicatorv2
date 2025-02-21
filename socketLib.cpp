@@ -17,6 +17,12 @@ std::string socketstuffs::interpretError(int errCode){
         case NOTOPENED:
             ret = "Error: Socket wasn't even opened\n\t- Call to closeIt() in socketLib.hpp";
             break;
+        case NONEMPTYVECTOR:
+            ret = "Error: this function only takes an empty vector as argument\n\t- Call to getValidScannedPorts() in socketLib.hpp";
+            break;
+        case ALREADYOPEN:
+            ret = "Error: Tried to call open without closing. Close opened socket first\n\t- Call to openIt() in socketLib.hpp";
+            break;
         default: 
             ret = "Undefined error or not yet implemented yet: " + std::to_string(errCode);
     }
@@ -105,6 +111,9 @@ socketstuffs::Socket::Socket(){
 }
 
 int socketstuffs::Socket::openIt(int port){
+    if(this->port != -1){
+        return ALREADYOPEN;
+    }
     int status;
     //copy from "Beej's Guide to Network Programming" by
     //      Brian "Beej Jorgensen" Hall, pg 22, Chapter 5
@@ -180,7 +189,10 @@ int socketstuffs::Socket::closeIt(){
 
     std::memset(&hints, 0, sizeof(hints));
     if(servinfo != NULL){
+        //std::cout << ">>>>its this" << std::endl;
         freeaddrinfo(servinfo);
+        servinfo = NULL;
+        //std::cout << ">>>>or is it?" << std::endl;
     }
     std::memset(socketfd, 0, sizeof(socketfd[0]));  //ChatGPT says it's fine...
 

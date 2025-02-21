@@ -6,12 +6,12 @@ namespace testing{
 so we can copy and paste this function*/
 inline void printCase(std::string nameOfCase, bool passed){
     if(passed){
-        std::cout << "Passed: ";
+        std::cout << "  :^) Passed: ";
     }
     else{
-        std::cout << "Failed: ";
+        std::cout << " >:^( Failed: ";
     }
-    std::cout << "nameOfCase"  << std::endl;
+    std::cout << nameOfCase << std::endl;
 }
 
 /*we can't verify things are working with sockets

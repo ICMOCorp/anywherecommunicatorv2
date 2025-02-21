@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string>
 #include <fstream>
+#include <atomic>
 
 namespace fs = std::filesystem;
 
@@ -12,6 +13,8 @@ namespace testing{
 inline const fs::path TESTINGDIR = "./testing";
 inline const int SUCCESS = 1;
 inline const int FAILURE = 0;
+
+inline std::atomic<bool> threadRunning = false;
 
 /*
 starts the python tester 
@@ -51,10 +54,14 @@ inline int endPython(){
 /*
 Essentially a wrapper for startPython() - endPython()
 so that it can be run on a separate thread
+
+uses thread safe variables for verification checks
 */
 inline void runPythonThread(){
+    threadRunning = true;
     startPython();
     endPython();
+    threadRunning = false;
 }
 
 /*
@@ -66,7 +73,7 @@ makes commandPath more compatible
 inline int sendCommand(fs::path commandStr){
     commandStr.replace_extension(".comm");
     
-    fs::path commandPath = TESTINGDIR / commandPath;
+    fs::path commandPath = TESTINGDIR / commandStr;
     std::ofstream commandFile(commandPath);
     commandFile.close();
     return 1;

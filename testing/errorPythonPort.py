@@ -61,7 +61,7 @@ def getNextCommand(path):
 #
 #empty args are returned as an empty list
 def parseCommand(commandStr):
-    if '@' not in command:
+    if '@' not in commandStr:
         return commandStr, []
     command, rest = commandStr.split("@") 
     rest = rest.split("&")
@@ -129,6 +129,7 @@ def cleanCommand(command, path):
         2. Run Tester
 '''
 def run(tester):
+    print("PYTHON: Starting Python Tester!")
     setup(TESTINGDIRECTORY)
 
     running = True
@@ -151,6 +152,7 @@ def run(tester):
         
         # we should be done with everything here right?
         cleanCommand(commandFilename, TESTINGDIRECTORY)
+    print("PYTHON: Closing Tester")
 
 
 # it's a wrapper for a testFunction collection so that it can
@@ -159,9 +161,18 @@ def run(tester):
 # I'm sure there's a more elegant way, but I wanted to 
 # generalize a function call so that this module 
 # can be independent on the kind of test we want 
+#
+# Every Tester gets equipped with two functions for verification
+# purposes. Tester gets a "test1" and "test2" command where
+# "test1" return true and "test2" returns false. We can test
+# to see this works by calling these functions and ensure
+# the test is working as well
 class Tester:
     def __init__(self):
-        self.commands = {}
+        self.commands = {
+            "test1": lambda args: True,
+            "test2": lambda args: False
+        }
 
     # Adds the command->testFunction pair to the 
     # tester
@@ -185,3 +196,8 @@ def generateTester(commandDict):
     for command in commandDict:
         retTest.addTestFunc(command, commandDict[command])
     return retTest
+
+
+# basic tester for check
+def runBasicTest():
+    run(Tester())

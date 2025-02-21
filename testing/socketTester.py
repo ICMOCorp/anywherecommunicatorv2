@@ -15,7 +15,7 @@ CLOSED = 2
 '''
 def checkSocket(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    result = s.connect_ex(('127.0.0.1',port))   # this is connect() but without 
+    result = s.connect_ex(('127.0.0.1',int(port)))   # this is connect() but without 
                                                 # without raising an exception
     s.close()
     if result == 0:
@@ -25,10 +25,9 @@ def checkSocket(port):
 
 # Test for socket
 def runTest():
-    print('PYTHON: Started Tester!!!')
     tester = eport.generateTester({
         "verifyOpen": lambda args: checkSocket(args[0]) == OPENED, 
-        "verifyClosed": lambda args: checkSocket(args[0]) == CLOSED
+        "verifyClose": lambda args: checkSocket(args[0]) == CLOSED
     })
 
     eport.run(tester)
