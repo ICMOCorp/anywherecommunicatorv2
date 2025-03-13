@@ -47,6 +47,19 @@ def getNextCommand(path):
         pError(MULTIPLECOMMANDS)
     else:
         return itemGot
+    
+# given a path and name of the command (the file)
+# it will simply read the file and return its contents
+def readContentsOfCommand(path, commandName):
+    content = None
+    try:
+        with open(path + "/" + commandName) as f:
+            content = f.read()
+    except:
+        print("PYTHON>>>Error reading {}/{}. in readContentsOfCommand() function".format(
+                                path, commandName
+                            ))
+    return content
 
 # takes a command string (the name of the file)
 #   of the form:
@@ -143,6 +156,10 @@ def run(tester):
             commandStr = commandFilename[:commandFilename.index('.comm')]
             command, args = parseCommand(commandStr)
             print('PYTHON: Found command {} ({})'.format(command, str(args)))
+            if command == "send" or command == "read":
+                msg = readContentsOfCommand(TESTINGDIRECTORY, commandFilename) 
+                args.append(msg)
+                print('PYTHON: It is a {} command. Read contents of file. ({}...)'.format(command, msg[:10]))
             tf = tester.getTestFunction(command)
             if tf is None:
                 print('PYTHON: INVALID COMMAND')

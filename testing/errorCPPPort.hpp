@@ -80,6 +80,26 @@ inline int sendCommand(fs::path commandStr){
 }
 
 /*
+writes a file with the commandStr so that the python script
+can communicate with this tester,
+
+has an override so that I can also send content in the files
+(file name has a limit and I want to be able to send 
+large messages)
+
+makes commandPath more compatible
+*/
+inline int sendCommand(fs::path commandStr, const std::string message){
+    commandStr.replace_extension(".comm");
+    
+    fs::path commandPath = TESTINGDIR / commandStr;
+    std::ofstream commandFile(commandPath);
+    commandFile << message;
+    commandFile.close();
+    return 1;
+}
+
+/*
 looks for "good" or "bad" file 
     if it exists,
     it deletes it 

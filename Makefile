@@ -9,11 +9,24 @@ instructions:
 
 socketTest: compileSocketTest runTest cleanTest
 
-socketLib.o: socketLib.cpp
+ringTest: compileRingTest runTest cleanTest
+
+clientTest: compileClientTest runTest cleanTest
+
+socketLib.o: socketLib.cpp ring.o
 	g++ ${GENERALARGS} -c socketLib.cpp -o socketLib.o
 
-compileSocketTest: socketLib.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/socketTester.cpp
-	g++ ${TESTDIRECTORY}/socketTester.cpp socketLib.o ${GENERALARGS} -I ${TESTDIRECTORY} ${PYTHONARGS} -o test
+compileSocketTest: socketLib.o ring.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/socketTester.cpp
+	g++ ${TESTDIRECTORY}/socketTester.cpp socketLib.o ring.o ${GENERALARGS} -I ${TESTDIRECTORY} ${PYTHONARGS} -o test
+
+ring.o: ring.cpp
+	g++ ${GENERALARGS} -c ring.cpp -o ring.o
+
+compileRingTest: ring.o ${TESTDIRECTORY}/ringTester.cpp
+	g++ ${TESTDIRECTORY}/ringTester.cpp ring.o ${GENERALARGS} -o test
+
+compileClientTest: socketLib.o ring.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/socketTester.cpp
+	g++ ${TESTDIRECTORY}/clientTester.cpp socketLib.o ring.o ${GENERALARGS} -I ${TESTINGDIRECTORY} ${PYTHONARGS} -o test
 
 runTest: test
 	export LD_LIBRARY_PATH=${LIBDIRECTORY}

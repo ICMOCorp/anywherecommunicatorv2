@@ -105,7 +105,8 @@ void socketTest(){
 
     //port check init
     socketstuffs::Socket s;
-    t.test("initialize check (port should be -1)", s.getPort() == -1);
+    t.test("initialize check (port and file descriptor should be -1)", s.getPort() == -1
+                                                                && s.getSocketFD() == -1);
 
     //simple connection
     std::string testname ="simple connection";
@@ -135,7 +136,8 @@ void socketTest(){
     }
     t.test(testname, retVal == 1 
                     && res == testing::SUCCESS 
-                    && s.getPort() == validPorts[0]);
+                    && s.getPort() == validPorts[0]
+                    && s.getSocketFD() != -1);
 
     // reopen - attempting to connect without closing original socket
     // expect to fail - connection is still good and port did not change
@@ -156,7 +158,8 @@ void socketTest(){
     }
     t.test(testname, retVal == socketstuffs::ALREADYOPEN
                     && res == testing::SUCCESS 
-                    && s.getPort() == validPorts[0]);
+                    && s.getPort() == validPorts[0]
+                    && s.getSocketFD() != -1);
 
     // close connection
     testname = "close connection";
@@ -177,7 +180,8 @@ void socketTest(){
     }
     t.test(testname, retVal == 1
                     && res == testing::SUCCESS 
-                    && s.getPort() == -1);
+                    && s.getPort() == -1
+                    && s.getSocketFD() == -1);
 
     // reclose - attempting to close when a socket isnt open
     // close is still successful - socket should remained closed
@@ -199,7 +203,8 @@ void socketTest(){
     }
     t.test(testname, retVal == 1
                     && res == testing::SUCCESS
-                    && s.getPort() == -1);
+                    && s.getPort() == -1
+                    && s.getSocketFD() == -1);
 
     // reconnect - attempting to reconnect to a closed socket
     testname = "reconnect";
@@ -219,7 +224,8 @@ void socketTest(){
     }
     t.test(testname, retVal == 1
                     && res == testing::SUCCESS
-                    && s.getPort() == oldPortVal);
+                    && s.getPort() == oldPortVal
+                    && s.getSocketFD() != -1);
 
 
     // reopen v2 - attempting to connect to ANOTHER PORT without closing original socket
@@ -255,7 +261,8 @@ void socketTest(){
     t.test(testname, retVal == socketstuffs::ALREADYOPEN
                     && res1 == testing::SUCCESS
                     && res2 == testing::FAILURE
-                    && s.getPort() == oldPortVal);
+                    && s.getPort() == oldPortVal
+                    && s.getSocketFD() != -1);
 
 
     testing::sendCommand("quit");
