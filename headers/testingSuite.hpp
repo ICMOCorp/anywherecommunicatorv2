@@ -37,35 +37,47 @@ that I wanted to shrink like 4 lines of repeated code to "test"
 
 I think this is as general as I can make it*/
 class TestSuite{
-    private:
-        int passed, total;
+private:
+    int passed, total;
 
-    public:
-        inline TestSuite(std::string name, std::string filename){
-            std::cout << "\n=====================================================" << std::endl;
-            std::cout << "Testing " << name <<  " in " << filename << std::endl;
-            std::cout << "=====================================================" << std::endl;
-            passed = 0;
-            total = 0;
-        }
-        inline ~TestSuite(){
-            std::cout << "=====================================================" << std::endl;
-        }
-        TestSuite(const TestSuite&) = delete;
-        TestSuite& operator=(const TestSuite&) = delete;
+public:
+    inline TestSuite(){};
+
+    inline TestSuite(std::string name, std::string filename){
+        std::cout << "\n=====================================================" << std::endl;
+        std::cout << "Testing " << name <<  " in " << filename << std::endl;
+        std::cout << "=====================================================" << std::endl;
+        passed = 0;
+        total = 0;
+    }
+    inline ~TestSuite(){
+        std::cout << "=====================================================" << std::endl;
+    }
+    inline TestSuite(const TestSuite& other){
+        this->passed = other.passed;
+        this->total = other.total;
+    }
+    inline friend void swap(TestSuite& a, TestSuite& b){
+        std::swap(a.passed, b.passed);
+        std::swap(a.total, b.total);
+    }
+    inline TestSuite& operator=(TestSuite other){
+        swap(*this, other);
+        return *this;
+    }
 
 
-        inline void test(std::string name, bool val){
-            printCase(name, val);
-            if(val){
-                passed++;
-            }
-            total++;
+    inline void test(std::string name, bool val){
+        printCase(name, val);
+        if(val){
+            passed++;
         }
+        total++;
+    }
 
-        inline void printFinalOutput(){
-            std::cout << ">>>Passed: " << passed << "/" << total << std::endl;
-        }
+    inline void printFinalOutput(){
+        std::cout << ">>>Passed: " << passed << "/" << total << std::endl;
+    }
 };
 
 }
