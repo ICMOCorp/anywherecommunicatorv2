@@ -6,6 +6,9 @@
 #include <fstream>
 #include <atomic>
 
+#include <thread>
+#include <chrono>
+
 namespace fs = std::filesystem;
 
 namespace testing{
@@ -15,6 +18,12 @@ inline const int SUCCESS = 1;
 inline const int FAILURE = 0;
 
 inline std::atomic<bool> threadRunning = false;
+
+inline void pauseForPython(const std::string& pauseReason, int time){
+    std::cout << "STATUS: ---PAUSE--- We are pausing for: " << pauseReason << std::endl;
+    std::cout << "\t>>Let's wait for " << time << " seconds" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(time));
+}
 
 /*
 starts the python tester 
@@ -109,6 +118,14 @@ looks for "good" or "bad" file
 */
 inline int readResult(){
     fs::path goodpath = TESTINGDIR / "good";
+
+    /*
+    std::cout << "Here is what we found in directory "  << std::endl;
+    for(const auto & entry: fs::directory_iterator(TESTINGDIR)){
+        std::cout << "\t" << entry.path() << std::endl;
+    }
+    */
+
     if(fs::exists(goodpath)){
         fs::remove(goodpath);   // shouldnt need to check because 
                                 //  it's checked in the if statement

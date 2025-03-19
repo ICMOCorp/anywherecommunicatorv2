@@ -66,7 +66,6 @@ public:
         return *this;
     }
 
-
     inline void test(std::string name, bool val){
         printCase(name, val);
         if(val){

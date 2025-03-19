@@ -13,20 +13,28 @@ ringTest: compileRingTest runTest cleanTest
 
 clientTest: compileClientTest runTest cleanTest
 
-socketLib.o: socketLib.cpp ring.o
+connectionTest: compileConnectionTest runTest cleanTest
+
+socketLib.o: socketLib.cpp ring.o history.o
 	g++ ${GENERALARGS} -c socketLib.cpp -o socketLib.o
 
 compileSocketTest: socketLib.o ring.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/socketTester.cpp
 	g++ ${TESTDIRECTORY}/socketTester.cpp socketLib.o ring.o ${GENERALARGS} -I ${TESTDIRECTORY} ${PYTHONARGS} -o test
 
-ring.o: ring.cpp
+ring.o: ring.cpp ${HEADERS}/ring.hpp
 	g++ ${GENERALARGS} -c ring.cpp -o ring.o
 
 compileRingTest: ring.o ${TESTDIRECTORY}/ringTester.cpp
 	g++ ${TESTDIRECTORY}/ringTester.cpp ring.o ${GENERALARGS} -o test
 
-compileClientTest: socketLib.o ring.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/socketTester.cpp
+compileClientTest: socketLib.o ring.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/clientTester.cpp
 	g++ ${TESTDIRECTORY}/clientTester.cpp socketLib.o ring.o ${GENERALARGS} -I ${TESTINGDIRECTORY} ${PYTHONARGS} -o test
+
+history.o: history.cpp ${HEADERS}/history.hpp
+	g++ ${GENERALARGS}  -c history.cpp -o history.o
+
+compileConnectionTest:: socketLib.o ring.o history.o ${TESTDIRECTORY}/errorCPPPort.hpp ${TESTDIRECTORY}/connectionTester.cpp
+	g++ ${TESTDIRECTORY}/connectionTester.cpp socketLib.o ring.o history.o ${GENERALARGS} -I ${TESTINGDIRECTORY} ${PYTHONARGS} -o test
 
 runTest: test
 	export LD_LIBRARY_PATH=${LIBDIRECTORY}

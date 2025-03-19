@@ -22,6 +22,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include <chrono>
+
 namespace socketstuffs{
 
 /*
@@ -46,6 +48,12 @@ enum ErrorCodes{
     SENDERROR =                     -23,
     BADINPUTERROR =                 -24,
     ALREADYBUSY =                   -25,
+    RESERROR =                      -26,
+    NORES =                         -27,
+
+    NOVALIDPORT =                   -28,
+    BADCLIENTCONNECTION =           -29,
+    NOCLIENTCONNECTION =            -30,
 
     //constants
     POLLTIMER =                   10000,
@@ -53,14 +61,17 @@ enum ErrorCodes{
     BADPORT =                       0,
     GOODPORT =                      1,
     LOWERLIMIT =                     1023,
-    NUMPORTS =                      65536
+    NUMPORTS =                      65536,
+
 };
 
 /* The states the connections are in
 */
-const int INIT                          = 0;
+const int QUIT                          = 0;
+const int OPEN                          = 1;
 const int IDLE                          = 2;
 const int BUSY                          = 3;
+const int FINALIZING                    = 4;
 
 /*function that takes a return code from the possible 
 functions below
@@ -156,9 +167,12 @@ class Client{
         getPacket has a poll() and is willing to wait
         POLLTIMER seconds before returning a POLLTIMEDOUT
 
+        if a poll comes out negative it will return 
+        UNKNOWNPOLLRESULT
+
         throws a runtime_exception error if fd is bad
         */
-        int getPacket(std::string& id, std::string& message);
+        int getPacket(std::string& id, std::string& message, int timer=POLLTIMER);
 
         /*sends a message from the client, expected message packet is 1 Megabyte:
             3 bytes                     - size of message
@@ -288,31 +302,30 @@ messages from services that connect to this server via the port
 In the most biggest, general, and simplest terms:
 
 1. Creates a port available to connect and awaits a client to connect
-2. If a client is connected, it alternates between two states:
+2. If a client is connected, it alternates between three states:
     IDLE: essentially does nothing on its own (except maybe send PING to
         verify the connection) and awaits for something to tell it to
         send something over the network
     BUSY: the job got told to send something over the network, so it 
         hangs and keeps waiting until the client sends a response. Once
-        the response is received from the client, this goes back to the 
-        IDLE state
+        the response is received from the client, the response in some 
+        data and goes to the FINALIZING state
+    FINALIZING: the BUSY state finished and stored the response in some 
+        storage somewhere. We let the user respond to that and try to
+        pull the data stored. We will allow an extra input from the user
+        to notify that the data was collected with the "collected" input
+        which will reset this state back to INIT mode
 
 This can be viewed like a fsa state:
 
          (client connected)                                 
-OPEN ---------------------->IDLE---->---->-----+
-                             ^                 |
-                             |                 | (get a query)  
-           (got a response)  |                 |
-                             |                 |
-                           BUSY<----<----<-----+
-
-
-In reality, this is achieved by means of a (almost over-abstractified)
-semaphore. There isn't really a variable, but instead a function call
-will restart the function (thus restarting the while loop) 
-while any hanging states will return (or exit) the function
-(thus pause the while loop) 
+[OPEN]-------------------->[IDLE]----->------>---------+ (get a query)  
+                             ^                         |
+                             |                         V 
+              ("collected")  |                       [BUSY]
+                             |                         |
+                    [COLLECTED]<--------<------<-------+
+                                  (got a response)
 */
 class Connection : public fsa::FSA{ // inheritence to enforce
                                     // the idea of FSA (what is this
@@ -320,91 +333,262 @@ class Connection : public fsa::FSA{ // inheritence to enforce
 private:
     history::History record;
 
-    std::pair<std::string, std::string> msgQueue;
+    //the pair will often store the [ID, MESSAGE BODY]
+    // in that order
+    std::pair<std::string, std::string> msgStorage;
 
     Socket s;
+    bool socketConnected;
     Client c;
-
-    std::string lastOutput;
-
-protected:
-    /*The implementation details of job are listed above
-    */
-    override void job();
+    bool clientConnected;
 
 public:
+
     Connection();
 
-    /* this simple connects to a socket
+    /* 
+    this simply calls connectSocket()
+    
+    returns the call to connectSocket
     */
-    override void start();
-    /* The format of the input for Connection is 2 parts:
-        - ID
-        - MESSAGE
-    This gets added to the msgQueue pair which is the 
-    two data listed above
+    int start() override;
+    /* 
+    The format of the input for Connection is 2 parts:
+        - COMMAND
+        - PARAMS
 
-    This input should block when it tries to input while the 
-    state is in BUSY mode (already processing) 
-    and return ALREADYBUSY
+    if COMMAND is "connect",
+        PARAMS is empty
 
-    if the size of the vector is not 2, 
-        let the user know it's an invalid size
-    if the size of the id is greater than 13
-    if the size of the second argument is bigger than a Megabyte
-        and return BADINPUTERROR 
+        From OPEN state
+        Transforms to IDLE state
+
+    if COMMAND is "query",
+        PARAMS should be 2 parts: "ID", "MSG"
+            - ID: The id of the query
+            - MSG: the message of the query
+
+        From IDLE state
+        To BUSY state
+
+    if COMMAND is "response"
+        PARAMS should be the message that we got from the 
+        query
+            - ID: the id of the response
+            - MSG: the message of the response
+
+        From BUSY state
+        To FINALIZING state
+
+    if COMMAND is "collected"
+        PARAMS should be empty
+
+        Now this part is a PROMISE... (not sure if I like that)
+        that we have safely extracted the output we wanted
+        
+        From FINALIZING state
+        To IDLE state
+    
+    if COMMAND is "NONE" (and it shouldn't be. Rather it 
+        shouldn't be called in the first place)
+
+        >This does nothing
+    
+    if COMMAND is "ERROR"
+        PARAMS will be the type of error we got
+            - "QUIT":               something fatal happen and this fsa
+                    should completely exit 
+
+                    From ANY STATE
+                    To QUIT
+
+            - "CONNECTIONRESET":    The connection to the client turned 
+                    sour so we should probably try to reconnect to client
+
+                    From ANY STATE
+                    To OPEN
+
+            - "BADRESPONSE":        The interaction between messages
+                    turned bad so just reset to the state where
+                    we're awaiting the next message
+
+                    From ANY STATE
+                    To IDLE
+    if COMMAND is "quit":
+        PARAMS will be empty
+
+        From ANY STATE
+        To QUIT
+    
+    does nothing on invalid commands/parameters
     */
-    override void input(std::vector<std::string>& args);
-    /*This disconnects to a socket
+    void input(std::vector<std::string>& args) override;
+    /*
+    This disconnects to a socket
     */
-    override void exit();
+    void exit() override;
 
-    /*This function does get the last output
-    but if no output was outputted last, it will
-    return ">@EMPTY@<"
+    /*The implementation details of job are listed above
+        OPEN:       - connectClient()
+        IDLE:       - [nothing]
+        BUSY:       - sendQuery() then store that data to msgStorage
+        FINALIZING: - [nothing]
     */
-    std::string getLastOutput();
+    int job() override;
+    friend int open(Connection& c);
+    friend int idle(Connection& c);
+    friend int busy(Connection& c);
+    friend int finalizing(Connection& c);
 
-    const std::list<std::string>& getRecord();
+    friend void printConnectionHistory(Connection &c);
+
+    /*
+    This returns a copy of the messageStorage
+
+    if state isnt correct (called when there wasn't anything
+    ready for user, returns <"SYS", "@NOT READY YET">)
+    
+    so a value is still returned, it's up to the user
+    */
+    std::pair<std::string, std::string> getMessageStorage();
 };
 
-//These are the functions the Connection does
-//and these are pulled out to enforce SRP
+/*
+checks if the argument length equals the desired length and writes
+a simpl error message
 
-/*Tries to connect to a valid socket and client
-returns 1 on connect
-
-raises an error on unable to connect
+returns whether or not the value is correct
 */
-int connectClient(Socket& s, Client& c, history::History& record);
+bool paramsCheck(int argLength, int wantedLength, const std::string& command, history::History& record);
+
+/*
+checks if the previous state matches what it should be and writes
+a simple error message 
+
+returns whether or not the value is correct
+*/
+bool stateTransitionCheck(int prevState, int prevStateDesired, const std::string& command, history::History& record);
+
+/*
+These are the functions the Connection does
+and these are pulled out to enforce SRP
+This code actually needs two loops. Client connection 
+needs to be polled separately, but in order to provide 
+a more unified interface, this function
+hides this double looped-implementation
+
+The two loops are:
+Is Socket Connected?
+    if NO:  --------+
+            ^       |
+            |       |
+            |       | Try to connect to a socket
+            |       |
+            +-------+
+
+Is Client Connected?
+    if NO:  --------+
+            ^       |
+            |       |
+            |       | Try to connect to a client
+            |       |
+            +-------+
 
 
-/*sends query to this job. 
+*/
 
-Then it calls poll to see if a response is given
+/*Tries to connect to a valid Socket
 
-returns 1 on successful send and response
+returns 1 on full connect
+
+returns NOVALIDPORT when there is no valid port 
+in the range 9000-9100
+
+raises error on impossible cases
+*/
+int connectSocket(Socket& s, history::History& record);
+
+
+/*Tries to connect to a valid client
+
+returns 1 on full connect
+
+returns BADCLIENTCONNECTION on the case where
+poll() gave a negative value for client connection
+
+returns NOCLIENTCONNECTION when the poll does not  
+return within the allotted poll() time for client connection
+
+raises error on impossible case
+*/
+int connectClient(Client& c, Socket& s, history::History& record);
+
+
+/*
+tries to send to client a body 
+
+returns 1 on successful send  
 
 return SENDERROR when unable to send
-return -1 when the response is nothing
 */
 int sendQuery(const std::string& id, 
                 const std::string& query,  
                 Client& c, 
                 history::History& record);
 
-/*Not sure if this function is needed
-but this sends "PING" and waits for "PONG"
+/*
+tries to get a message from the client
+and modifies id and query to be the result
+>> NOTE that id and query gets modified
+so make sure it's empty
 
-a difference response or a too long of a wait response
-leads to a disconnect
+returns 1 on successful response  
 
-returns 1 on successful send and response
+returns NORES when there is no response
+return RESERROR when response gives error
+*/
+int getResponse(std::string& id, 
+                std::string& response,  
+                Client& c, 
+                history::History& record);
+
+/*
+this sends "PING" and waits for "PONG"
+
+returns 1 on any successful pingpong
 
 returns SENDERROR when unable to send
-returns -1 when the response is no PONG
+returns -1 when it is unable to get a PONG
+*/
+int pingpong(Client& c, history::History& record);
+
+/*
+this just tries to pingpong up to 3 times when
+poll comes out empty
+
+if any response is weird, it will 
+return -1
+
+returns 1 on any successful pingpong
+
+returns -1 when it failed all 3 times
 */
 int verifyConnection(Client& c, history::History& record);
+
+/*Here are the functions the state of the Connection is in
+
+they return 1 on successful jobs
+they also may call their own inputs at times
+*/
+int open(Connection& c);
+int idle(Connection& c);
+int busy(Connection& c);
+int finalizing(Connection& c);
+
+/*
+simple calls printHistory() of c.history
+*/
+void printConnectionHistory(Connection& c);
 
 }
 

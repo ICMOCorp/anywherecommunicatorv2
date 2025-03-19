@@ -227,11 +227,12 @@ int socketstuffs::Client::connectIt(Socket& s){
     std::cout << "socket port is " << s.socketfd[0].fd << std::endl;
     int val = poll(s.socketfd, 1, POLLTIMER);
     if(val == 0){
-        return POLLTIMEDOUT;
+        return socketstuffs::POLLTIMEDOUT;
     }
     else if(val < 0){
         // Not sure what happens when poll comes out negative
         // from the documentation
+        return socketstuffs::UNKNOWNPOLLRESULT;
     }
     else{
         if(s.socketfd[0].revents & POLLIN){
@@ -247,7 +248,7 @@ int socketstuffs::Client::connectIt(Socket& s){
     return UNKNOWNPOLLRESULT;
 }
 
-int socketstuffs::Client::getPacket(std::string& id, std::string& message){
+int socketstuffs::Client::getPacket(std::string& id, std::string& message, int timer){
     if(clientfd[0].fd == -1){
         throw std::runtime_error("ERROR: client fd is bad (client is not connected)\n"
                                  "in getPacket() in Client in socketLib.hpp");
@@ -257,14 +258,20 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
     char chunk[chunkSize];
     std::memset(chunk, '\0', chunkSize);
 
+    auto start = std::chrono::steady_clock::now();
     uint32_t messageSize = sharedstuff::INVALIDMSGCOUNT;
     while(buffer.size() < sharedstuff::MSGSIZEBYTECOUNT){
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+        if(elapsed > std::chrono::milliseconds(timer)){
+            return POLLTIMEDOUT;
+        }
         //grab a couple bytes until we can recognize the size of the message
-        int val = poll(clientfd, 1, POLLTIMER);
+        int val = poll(clientfd, 1, timer); // By default timer is POLLTIMER which is 10000 - 10s
         if(val == 0){
             return POLLTIMEDOUT;
         }
         else if(val < 0){
+            /*
             // Not sure what happens when poll comes out negative
             // from the documentation
             throw std::runtime_error(std::string("Oh lord please help me\n") + 
@@ -272,6 +279,9 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                                      "in reading the message size bytes\n" + 
                                      "when polling\n" + 
                                      "int getPacket() of socketLib.hpp");
+            */
+            //It it better if a bad case is handled upstairs than crashing
+            return socketstuffs::UNKNOWNPOLLRESULT;
         }
         else{
             if(clientfd[0].revents & POLLIN){
@@ -285,12 +295,14 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                     return READCLOSE;
                 }
                 std::string toAdd(chunk, bytesRead);
+                //std::cout << "Read: " << toAdd << std::endl;
                 buffer.push(toAdd, toAdd.size());
 
                 continue;
             }
             else{
-                break;
+                //why did we do this again?
+                //break;
             }
             /*
             std::cout << "What did we get? " << std::endl;
@@ -321,6 +333,7 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
     /*>>The message size part of the message<<*/
     //I don't like the memory usage of this... a whole string object?
     std::string msgSizeStr;
+    //std::cout << "buffer size: " << buffer.size() << std::endl;
     int val = buffer.pop(msgSizeStr, sharedstuff::MSGSIZEBYTECOUNT);
     if(val != 1){       // some defensive programming
         //This shouldnt be possible because we just made this
@@ -342,13 +355,19 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
     */
 
     /*>>The ID part of the message*/
+    start = std::chrono::steady_clock::now();
     while(buffer.size() < sharedstuff::IDSIZEBYTECOUNT){
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+        if(elapsed > std::chrono::milliseconds(timer)){
+            return POLLTIMEDOUT;
+        }
         //grab a couple bytes until we can recognize the size of the message
         int val = poll(clientfd, 1, POLLTIMER);
         if(val == 0){
             return POLLTIMEDOUT;
         }
         else if(val < 0){
+            /*
             // Not sure what happens when poll comes out negative
             // from the documentation
             throw std::runtime_error(std::string("Oh lord please help me\n") +
@@ -356,6 +375,9 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                                      "in reading the message size bytes\n" +
                                      "when polling\n" +
                                      "int getPacket() of socketLib.hpp");
+            */
+            //It it better if a bad case is handled upstairs than crashing
+            return socketstuffs::UNKNOWNPOLLRESULT;
         }
         else{
             if(clientfd[0].revents & POLLIN){
@@ -374,7 +396,8 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                 continue;
             }
             else{
-                break;
+                // don't need to do this, we manually check the time
+                //break;
             }
         }
 
@@ -405,13 +428,19 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
     /*>>The message part of the message*/
     messageSize = sharedstuff::strToUint(msgSizeStr);
     //std::cout << "message size is " << messageSize << std::endl;
+    start = std::chrono::steady_clock::now();
     while(buffer.size() < messageSize){
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+        if(elapsed > std::chrono::milliseconds(timer)){
+            return POLLTIMEDOUT;
+        }
         //grab the remaining message floating in the internet
         int val = poll(clientfd, 1, POLLTIMER);
         if(val == 0){
             return POLLTIMEDOUT;
         }
         else if(val < 0){
+            /*
             // Not sure what happens when poll comes out negative
             // from the documentation
             throw std::runtime_error(std::string("Oh lord please help me\n") +
@@ -419,6 +448,9 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                                      "in reading the message size bytes\n" +
                                      "when polling\n" +
                                      "int getPacket() of socketLib.hpp");
+            */
+            //It it better if a bad case is handled upstairs than crashing
+            return socketstuffs::UNKNOWNPOLLRESULT;
         }
         else{
             if(clientfd[0].revents & POLLIN){
@@ -437,7 +469,8 @@ int socketstuffs::Client::getPacket(std::string& id, std::string& message){
                 continue;
             }
             else{
-                break;
+                //
+                //break;
             }
         }
 
@@ -500,12 +533,18 @@ int socketstuffs::Client::sendPacket(const std::string& id, const std::string& m
     */
     uint32_t totalBytes = 0;
 
+    auto start = std::chrono::steady_clock::now();
     while(totalBytes < packetSize){
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+        if(elapsed > std::chrono::milliseconds(POLLTIMER)){
+            return POLLTIMEDOUT;
+        }
         int val = poll(clientfd, 1, POLLTIMER);
         if(val == 0){
             return POLLTIMEDOUT;
         }
         else if(val < 0){
+            /*
             // Not sure what happens when poll comes out negative
             // from the documentation
             throw std::runtime_error(std::string("Oh lord please help me\n") + 
@@ -513,6 +552,9 @@ int socketstuffs::Client::sendPacket(const std::string& id, const std::string& m
                                      "in sending the packet\n"
                                      "when polling\n"
                                      "int sendPacket() of socketLib.hpp");
+            */
+            //It it better if a bad case is handled upstairs than crashing
+            return socketstuffs::UNKNOWNPOLLRESULT;
         }
         else{
             if(clientfd[0].revents & POLLOUT){
@@ -545,41 +587,82 @@ int socketstuffs::Client::closeIt(){
 }
 
 /* Connection stuff */
-int socketstuffs::connectClient(Socket& s, Client& c, history::History& record){
+bool socketstuffs::paramsCheck(int argLength, int wantedLength, const std::string& command, history::History& record){
+    if(argLength != wantedLength){
+        record.addMessage(std::string("ERROR: Got connect command, but incorrect number of arguments: ") + std::to_string(argLength) + "\n" +
+                            "Should be " + std::to_string(wantedLength) + "\n" + 
+                            "for '" + command + "' params in input() in socketLib.cpp");
+        return false;
+    }
+    return true;
+}
+
+bool socketstuffs::stateTransitionCheck(int prevState, int prevStateDesired, const std::string& command, history::History& record){
+    if(prevState != prevStateDesired){
+        record.addMessage(std::string("ERROR: the current connectiong is in incorrect state: ") + std::to_string(prevState) + "\n" +
+                            "Should be " + std::to_string(prevStateDesired) + "\n" + 
+                            "for '" + command + "' params in input() in socketLib.cpp");
+        return false;
+    }
+    return true;
+}
+
+int socketstuffs::connectSocket(Socket& s, history::History& record){
     std::vector<int> validPorts;
     int res;
     res = getValidScannedPorts(9000, 9100, validPorts);
     if(res == socketstuffs::NONEMPTYVECTOR) { // defensive programming
         throw std::logic_error(std::string("Please don't do this to me\n") + 
-                            "in getting validScannedPorts()\n" +
-                            "in the state INIT in job() in socketLib.cpp");
+                            "in gettingValidScannedPorts() when I passed an empty vector\n" +
+                            "in connectSocket() in socketLib.cpp");
+    }
+    if(validPorts.size() == 0){
+        record.addMessage(">>No valid port available from 9000-9100");
+        return socketstuffs::NOVALIDPORT;
     }
     int index = 0;
     record.addMessage(std::string("Attempting to open a socket at port ") + std::to_string(validPorts[index]));
     res = s.openIt(validPorts[index]);
     while(res != 1){
         record.addMessage(">>Failed at this port:");
-        if(res == socketstuffs::INVALIDPORT){ // defensive programming
+        if(res == socketstuffs::INVALIDPORT){ 
             record.addMessage("\t- This port was invalid");
+            throw std::logic_error(std::string("You see, this is impossible\n") + 
+                            "in connecting to a just-checked valid port\n" +
+                            "in connectSocket() in socketLib.cpp");
         }
         else if(res == socketstuffs::ALREADYOPEN){
             record.addMessage("\t- This port is already used");
+            throw std::logic_error(std::string("You see, this is impossible\n") + 
+                            "in connecting to a just-checked valid port\n" +
+                            "in connectSocket() in socketLib.cpp");
         }
         index++;
         res = s.openIt(validPorts[index]);
     }
     if(res != 1){
-        throw std::runtime_error(std::string("Failed to open a socket in the port range (9000-9100)"));
+        //getValidScannedPorts() should be giving us valid ports
+        // any errors should point to something wrong with getValidScannedPorts
+        throw std::logic_error(std::string("Failed to open a socket in the port range (9000-9100)\n") +
+                                "Maybe try fixing getValidScannedPorts()\n"+
+                                "in connectSocket() in socketLIb.cpp");
     }
+    return 1;
+}
+
+int socketstuffs::connectClient(Client& c, Socket& s, history::History& record){
     record.addMessage("Attempting to connect to a client");
-    res = c.connectIt(s);
+    int res = c.connectIt(s);
     if(res == socketstuffs::UNKNOWNPOLLRESULT){
         record.addMessage("Failed to connect to a client");
         record.addMessage("The errno message is:");
-        record.addMessage(std:string("\t") + std::strerror(errno));
-        throw std::runtime_error(std::string("Oh I'm a gummy bear\n") + 
-                                "When I wanted to connect to client\n" + 
-                                "in the state OPEN in job in socketLib.cpp");
+        record.addMessage(std::string("\t") + std::strerror(errno));
+        return socketstuffs::BADCLIENTCONNECTION;
+    }
+    else if(res == socketstuffs::POLLTIMEDOUT){
+        record.addMessage("Failed to connect to a client");
+        record.addMessage("Poll timed out");
+        return socketstuffs::NOCLIENTCONNECTION;
     }
     record.addMessage(">>>>Client connected successfully");
     return 1;
@@ -587,9 +670,8 @@ int socketstuffs::connectClient(Socket& s, Client& c, history::History& record){
 
 int socketstuffs::sendQuery(const std::string& id, 
                             const std::string& query, 
-                            const Client& c, 
+                            Client& c, 
                             history::History& record){
-    //first we send
     record.addMessage(std::string("Trying to send message: ") + query + "\n" + 
                     "\t> From " + id + "\n");
     int res = c.sendPacket(id, query);
@@ -601,8 +683,8 @@ int socketstuffs::sendQuery(const std::string& id,
         */
         //Not sure if crashing on bad message is a good idea
         //The input is wrong, so we should be continuing 
-        record.addMessage(std::string("SEND ERROR: Message to big! Query size is ") + std::to_string(query) + "\n" + 
-                        "In sendQuery() function in socketLib.cpp");
+        record.addMessage(std::string("SEND ERROR: Message to big! Query size is ") + std::to_string(query.size()) + "\n" + 
+                        "in sendQuery() function in socketLib.cpp");
         return socketstuffs::SENDERROR;
     }
     else if(res == socketstuffs::POLLTIMEDOUT){
@@ -614,16 +696,21 @@ int socketstuffs::sendQuery(const std::string& id,
                                 "in sendQuery() function of socketLib.cpp");
         */    
         record.addMessage(std::string("SEND ERROR: Poll timed out in sending\n") + 
-                        "In sendQuery() function in socketLib.cpp");
+                        "in sendQuery() function in socketLib.cpp");
         return socketstuffs::SENDERROR;
     }
     record.addMessage(std::string(">>>>Message sent successfully\n"));
 
-    //now we wait
+    return 1;
+}
+
+int socketstuffs::getResponse(std::string& id, 
+                            std::string& response, 
+                            Client& c, 
+                            history::History& record){
     record.addMessage(std::string("Awaiting a response from the client\n") + 
                     "I'm willing to wait " + std::to_string(socketstuffs::POLLTIMER/1000) + " secs\n");
-    std::string response, responseID;
-    res = c.getPacket(responseID, response);
+    int res = c.getPacket(id, response);
     if(res == socketstuffs::POLLTIMEDOUT){
         /*
         //not sure why this happens
@@ -634,18 +721,21 @@ int socketstuffs::sendQuery(const std::string& id,
         */
         //I'm not sure if crashing on an empty poll is a good idea
         // we should instead return a different value
-        record.addMessage(std::string(">>>>Got a bad poll response"));
-        return -1;
+        record.addMessage(std::string(">>>>Got no poll response"));
+        return socketstuffs::NORES;
     }
-    record.addMessage(std::string(">>>>Response received successfully: ") + response);
+    else if(res == socketstuffs::UNKNOWNPOLLRESULT){
+        record.addMessage(std::string(">>>>Got a bad poll response"));
+        return socketstuffs::RESERROR;
+    }
 
-    lastOutput = response;
+    record.addMessage(std::string(">>>>Response received successfully: ") + response);
     return 1;
 }
 
-int socketstuffs::verifyConnection(Client& c, history::History& record){
+int socketstuffs::pingpong(Client& c, history::History& record){
     //first we send
-    record.addMessage(std::string("Trying to send message: ") + "PING\n" + 
+    record.addMessage(std::string("Trying to 'PING'\n") +
                     "\t> From SYS \n");
     int res = c.sendPacket("SYS", "PING");
     if(res == socketstuffs::MSGTOOBIG){
@@ -655,8 +745,8 @@ int socketstuffs::verifyConnection(Client& c, history::History& record){
                                 "in verifyConnection() function of socketLib.cpp");
         */
         //Not sure if crashing on bad message is a good idea
-        record.addMessage(std::string("SEND ERROR: Message to big! Query size is ") + std::to_string(query) + "\n" + 
-                        "In verifyConnection() function in socketLib.cpp");
+        record.addMessage(std::string("SEND ERROR: Message to big! Query size is 4\n") +
+                        "in pingpong() function in socketLib.cpp");
         return socketstuffs::SENDERROR;
     }
     else if(res == socketstuffs::POLLTIMEDOUT){
@@ -670,16 +760,16 @@ int socketstuffs::verifyConnection(Client& c, history::History& record){
         //Don't want to crash on a bad poll but the user should know
         // the connection may be buggin out
         record.addMessage(std::string("SEND ERROR: Poll timed out in sending\n") + 
-                        "In verifyConnection() function in socketLib.cpp");
+                        "in pingpong() function in socketLib.cpp");
         return socketstuffs::SENDERROR;
     }
-    record.addMessage(std::string("Sent PING successfully\n"));
+    record.addMessage(std::string(">>>>Sent PING successfully\n"));
 
     //now we wait
-    record.addMessage(std::string("Awaiting a response from the client\n") + 
-                    "I'm willing to wait " + socketstuffs::POLLTIMER + " secs\n");
+    record.addMessage(std::string("Awaiting a response from the client...\n") + 
+                    ">I'm willing to wait " + std::to_string(socketstuffs::POLLTIMER/1000) + " secs\n");
     std::string response, responseID;
-    res = getPacket(responseID, response);
+    res = c.getPacket(responseID, response);
     if(res == socketstuffs::POLLTIMEDOUT){
         /*
         //not sure why this happens
@@ -690,7 +780,8 @@ int socketstuffs::verifyConnection(Client& c, history::History& record){
         */
         //Don't want to crash on a bad poll but the user should know
         // the connection may be buggin out
-        record.addMessage(std::string(">>>>Got a bad poll response"));
+        record.addMessage(std::string(">>>>PONG took too long"));
+        //std::cout << "Failed to get PONG" << std::endl;
         return -1;
     }
     if(response != "PONG"){
@@ -698,21 +789,65 @@ int socketstuffs::verifyConnection(Client& c, history::History& record){
                                     "\t>> " + response);
         return -1;
     }
+    record.addMessage(std::string(">>>>Got PONG successfully!\n"));
     
     return 1;
 }
 
+int socketstuffs::verifyConnection(Client& c, history::History& record){
+    record.addMessage("Attempting to verify the connection");
+    record.addMessage("pingpong-ing 3 times");
+    for(int i = 0;i<3;i++){
+        record.addMessage(std::string("\tAttempt: ") + std::to_string(i+1));
+        int res = socketstuffs::pingpong(c, record);
+        if(res == socketstuffs::SENDERROR){
+            record.addMessage("\t>Failed<");
+            break;
+        }
+        else if(res == -1){
+            record.addMessage("\t? -_- < empty...");
+        }
+        else{
+            record.addMessage("\t>SUCCESS!<");
+            return 1;
+        }
+    }
+    record.addMessage("Failed to send verify connection");
+    record.addMessage("is this connection trustworthy?");
+    return -1;
+}
+
 socketstuffs::Connection::Connection(){
-    state = socketstuffs::INIT;
-    lastOutput = "";
+    state = -1;
+    socketConnected = false;
+    clientConnected = false;
 }
 
-socketstuffs::Connection::start(){
-    connectClient(s, c, record);
+int socketstuffs::Connection::start(){
+    int res = connectSocket(s, record);
+    /* Why do we have an infinite loop? We should
+    define bad start to be restarted by user
+    while(res == socketstuffs::NOVALIDPORT){
+        //being watchful because of infinite loop
+        if(res == socketstuffs::QUIT){
+            return -1;
+        }
+
+        //I kind of want the user to input a port range to connect to
+        // on each attempt at reconnect
+        // I will simple just accept the already available ranges
+        // and later extend it
+        res = connectSocket(s, record);
+    }
+    */
+    if(res == 1){
+        state = OPEN;
+    }
+    return res;
 }
 
-socketstuffs::Connection::input(std::vector<std::string>& args){
-    if(args.size() != 2){
+void socketstuffs::Connection::input(std::vector<std::string>& args){
+    if(args.size() < 1){
         /*
         //Since it is the USER's fault, instead of a crash
         //we need to DISPLAY to the user that the input was bad
@@ -720,73 +855,231 @@ socketstuffs::Connection::input(std::vector<std::string>& args){
                                 "Got a vector of size: " + std::to_string(args.size()) + "\n" + 
                                 "for input() function in socketLib.hpp");
         */
-        record.addMessage(std::string("Invalid argument size. Number of arguments must be 2.\n") + 
-                        + "Got a vector f size: " + std::to_string(args.size()) + "\n" + 
+        record.addMessage(std::string("ERROR: At least input a command.\n") + 
+                        + "Got a vector of size: " + std::to_string(args.size()) + "\n" + 
                         + "for input() function in socketLib.hpp");
-        return socketstuffs::BADINPUTERROR;
+        return;
     }
-    if(args[0].size() > 13){
-        record.addMessage(std::string("The first argument (ID) is longer than 13 characters\n") + 
-                            "> it is " + std::to_string(args[0].size()) + " characters long\n" +
-                            "in input() function in socketLib.hpp");
-        return socketstuffs::BADINPUTERROR;
+    if(args[0] == "connect"){
+        if(!paramsCheck(args.size()-1, 0, "connect", record)){
+            return;
+        }
+        else if(!stateTransitionCheck(state, socketstuffs::OPEN, "connect", record)){
+            return;
+        }
+        state = socketstuffs::IDLE;
     }
-    if(args[1].size() > sharedstuff::Megabyte) {
-        record.addMessage(std::string("The message part of the argument exceeds the maximum message length (") + sharedstuff::Megabyte + ")\n" + 
-                                    "the message size is " + args[1].size() + "\n" + 
-                                    "in input function in socketLib.hpp");
-        return socketstuffs::BADINPUTERROR;
+    else if(args[0] == "query"){
+        if(!paramsCheck(args.size()-1, 2, "query", record)){
+            return;
+        }
+        else if(!stateTransitionCheck(state, socketstuffs::IDLE, "query", record)){
+            return;
+        }
+        msgStorage.first = args[1];
+        msgStorage.second = args[2];
+        state = socketstuffs::BUSY;
     }
-    if(args[1].size() == 0){
-        record.addMessage(std::string("Don't send an empty body\n") +
-                            "in input function in socketLib.hpp");
-        return socketstuffs::BADINPUTERROR;
+    else if(args[0] == "response"){
+        if(!paramsCheck(args.size()-1, 2, "response", record)){
+            return;
+        }
+        else if(!stateTransitionCheck(state, socketstuffs::BUSY, "response", record)){
+            return;
+        }
+        state = socketstuffs::FINALIZING;
     }
-    if(state == socketstuffs::BUSY){
-        record.addMessage(std::string("The connection is already busy. Wait until it is finished\n") + 
-                            "in input function in socketLib.hpp");
-        return socketstuffs::ALREADYBUSY;
+    else if(args[0] == "collected"){
+        if(!paramsCheck(args.size()-1, 0, "collected", record)){
+            return;
+        }
+        else if(!stateTransitionCheck(state, socketstuffs::FINALIZING, "collected", record)){
+            return;
+        }
+        state = socketstuffs::IDLE;
     }
-
-    record.addMessage(std::string("Got message! From: ") + args[0] + "\n" +
-                        ">>" + args[1]);
-    msgQueue = std::make_pair(args[0], args[1]);
-    state = socketstuffs::BUSY;
+    else if(args[0] == "ERROR"){
+        if(!paramsCheck(args.size()-1, 1, "ERROR", record)){
+            return;
+        }
+        if(args[1] == "QUIT"){
+            state = socketstuffs::QUIT;
+        }
+        else if(args[1] == "CONNECTIONRESET"){
+            c.closeIt();
+            state = socketstuffs::OPEN;
+        }
+        else if(args[1] == "BADRESPONSE"){
+            state = socketstuffs::IDLE;
+        }
+    }
+    else if (args[0] == "NONE"){
+        //DO NOTHING
+    }
+    else if(args[0] == "quit"){
+        if(!paramsCheck(args.size()-1, 0, "quit", record)){
+            return;
+        }
+        state = socketstuffs::QUIT;
+    }
+    else{
+        record.addMessage(std::string("Got invalid command: ") + args[0]);
+        return;
+    }
 }
 
-socketstuffs::Connection::exit(){
+void socketstuffs::Connection::exit(){
     c.closeIt();
     s.closeIt();
 }
 
-void socketstuffs::Connection::job() {
-    if(state == socketstuffs::IDLE){
-        //I think it mostly does nothing here
-        //This part is mostly just doing idle things until we get an input
-        // maybe we try verifyConnection() in order to not let it die?
+int socketstuffs::Connection::job() {
+    if(state == socketstuffs::QUIT){
+        exit();
+        return -1;
+    }
+    else if(state == socketstuffs::OPEN){
+        return open(*this);
+    }
+    else if(state == socketstuffs::IDLE){
+        return idle(*this);
     }
     else if(state == socketstuffs::BUSY){
-        int res = sendQuery(msgQueue.first, msgQueue.second, this, record);
-        if(res == -1){
-            record.addMessage(std::string("Didn't get a response from sendQuery\n") +
-                                "in job() in socketLib.hpp");
-        }
-        else if(res == socketstuffs::SENDERROR){
-            record.addMessaeg(std::string("Wasn't able to send in sendQuery\n") +
-                                "in job() in socketLib.cpp");
-        }
-        state = socketstuffs::IDLE;
+        return busy(*this);
     }
+    else if(state == socketstuffs::FINALIZING){
+        return finalizing(*this);
+    }
+    else{
+        throw std::logic_error(std::string("ERROR: State ended up in undefined state: ") + std::to_string(state));
+    }
+    //Dead code
+    return 1;
 }
 
-std::string socketstuffs::Connection::getLastOutput(){
-    if(lastOutput == ""){
-        return ">@EMPTY@<";
+std::pair<std::string, std::string> socketstuffs::Connection::getMessageStorage(){
+    if(state != socketstuffs::FINALIZING){
+        return std::make_pair("SYS", "@NOT READY YET");
     }
-
-    return lastOutput;
+    std::pair<std::string, std::string> copy = msgStorage;
+    std::vector<std::string> cmd = {"collected"};
+    input(cmd);
+    return copy;
 }
 
-const std::list<std::string>& socketstuffs::Connection::getRecord(){
-    return record.getMessage();
+int socketstuffs::open(Connection& c){
+    int res = connectClient(c.c, c.s, c.record);
+    if(res == socketstuffs::BADCLIENTCONNECTION){
+        std::vector<std::string> errorCommand = {
+            "ERROR",
+            "CONNECTIONRESET"
+        };
+        c.input(errorCommand);
+        return socketstuffs::NOCLIENTCONNECTION;
+    }
+    else if(res == socketstuffs::NOCLIENTCONNECTION){
+        //since we can't reach a client
+        // we gotta try again on next call I suppose
+        c.record.addMessage("Trying again on next call");
+        return socketstuffs::NOCLIENTCONNECTION;
+    }
+    
+    //verify the connection
+    res = verifyConnection(c.c, c.record);
+    if(res == socketstuffs::SENDERROR){
+        c.record.addMessage("Connection Error: SENDERROR - failed to send PING");
+        c.record.addMessage("I do not like this connection, disconnecting");
+        c.c.closeIt();
+        return -1;
+    }
+    else if(res == -1){
+        c.record.addMessage("Connection Error: NO PONG - did not get a PONG");
+        c.record.addMessage("I do not like this connection, disconnecting");
+        c.c.closeIt();
+        return -1;
+    }
+
+
+
+    std::vector<std::string> nextCommand = {
+        "connect"
+    };
+    c.input(nextCommand);
+    return 1;
+}
+
+int socketstuffs::idle(Connection& c){
+    //does nothing right?
+    return 1;
+}
+
+int socketstuffs::busy(Connection& c){
+    int res = socketstuffs::sendQuery(c.msgStorage.first, c.msgStorage.second, c.c, c.record);
+    if(res == socketstuffs::SENDERROR){
+        c.record.addMessage(std::string("Wasn't able to send in sendQuery\n") +
+                            "in job() in socketLib.cpp");
+        std::vector<std::string> errorCommand = {
+            "ERROR", 
+            "BADRESPONSE"
+        };
+        c.input(errorCommand);
+        return socketstuffs::SENDERROR;
+    }
+    
+    c.msgStorage.first = "";
+    c.msgStorage.second = "";
+    res = socketstuffs::getResponse(c.msgStorage.first, c.msgStorage.second,
+                                    c.c, c.record);
+    if(res == socketstuffs::RESERROR){
+        //On a bad communication, we ought to probably retry connecting
+        // to client right?
+        std::vector<std::string> errorCommand = {
+            "ERROR",
+            "CONNECTIONRESET"
+        };
+        c.input(errorCommand);
+        return -1;
+    }
+    //no res is a bad poll
+    while(res == socketstuffs::NORES){
+        //Watching because of potential infinite loop
+        if(c.state == socketstuffs::QUIT){
+            return -1;
+        }
+        //We have to keep trying to get a response
+        //since getResponse() automatically polls() for 10 seconds,
+        // we can just check call getResponse again
+        c.record.addMessage(std::string("Waiting for response. Checking again"));
+        //c.msgStorage.first = "";
+        //c.msgStorage.second = "";
+        res = socketstuffs::getResponse(c.msgStorage.first, c.msgStorage.second,
+                                        c.c, c.record);
+        if(res == socketstuffs::RESERROR){
+            //On a bad communication, we ought to probably retry connecting
+            // to client right?
+            std::vector<std::string> errorCommand = {
+                "ERROR",
+                "CONNECTIONRESET"
+            };
+            c.input(errorCommand);
+            return -1;
+        }
+    }
+
+    std::vector<std::string> nextCommand = {
+        "response", 
+        c.msgStorage.first,
+        c.msgStorage.second
+    };
+    c.input(nextCommand);
+    return 1;
+}
+
+int socketstuffs::finalizing(Connection& c){
+    //does nothing?
+    return 1;
+}
+
+void socketstuffs::printConnectionHistory(Connection& c){
+    history::printHistory(c.record);
 }

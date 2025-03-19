@@ -14,22 +14,32 @@ and input(). start() and exit() help with initialization and freeing
 of memory and resources while input() is designed to change the 
 FSA state while it is the middle of the loop.
 
-Hence, the loop needs to look as such:
+Hence, the bare loop needs to look as such:
 while(true){
     input(some input);
-    job();
+    int ret = job();
 }
+
+Note that job() function has as return function. When interacting
+with some FSAs, there comes times when we need to know if a job
+was finished or not or if the state is awaiting something from
+the user's end. Turns out a return value from job is crucial 
+to figuring out how to adapt to the ever-changing state of the
+FSA
 */
 class FSA{
 protected:
     int state;
 
-    virtual void job() = 0;
-
 public:
-    virtual void start() = 0;
+    virtual int job() = 0;
+    virtual int start() = 0;
     virtual void input(std::vector<std::string>& msgs) = 0;
     virtual void exit() = 0;
+
+    inline int getState(){
+        return state;
+    }
 };
 
 }
